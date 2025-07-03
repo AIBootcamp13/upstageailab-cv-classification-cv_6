@@ -1,8 +1,8 @@
 import torch
 from torch import optim
 
-from trainer.training import training
-from trainer.evaluation import evaluation
+from trainer.training import training, training_use_amp
+from trainer.evaluation import evaluation, evaluation_use_amp
 from utils.EarlyStopping import EarlyStopping
 from trainer.wandb_logger import WandbLogger
 
@@ -20,14 +20,15 @@ def training_loop(model, train_dataloader, valid_dataloader, train_dataset, val_
         
         if scheduler is not None:
             if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                scheduler.step(valid_ret["valid_loss"])
+                scheduler.step(valid_ret["valid_f1"])
+                # scheduler.step(valid_ret["valid_loss"])
             else:
                 scheduler.step(epoch)  # CosineWarmRestart 등은 epoch 기반
         
 
         # early stopping 및 check point에서 모델 저장
-        # early_stopping(valid_ret["valid_f1"], model)
-        early_stopping(valid_ret["valid_loss"], model)
+        early_stopping(valid_ret["valid_f1"], model)
+        # early_stopping(valid_ret["valid_loss"], model)
         logger.save_model()
 
         print(f"Epoch [{epoch}/{num_epochs}]")

@@ -16,7 +16,7 @@ class EfficientNetB5Model(nn.Module):
         # 새로운 분류기(head)를 정의합니다.
         self.head = nn.Linear(self.feature_dim, num_classes)
 
-    def forward(self, x):
+    def forward(self, x, labels=None):
         features = self.backbone(x)
         output = self.head(features)
         return output

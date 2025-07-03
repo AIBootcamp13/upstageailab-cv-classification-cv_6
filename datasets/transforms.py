@@ -32,6 +32,7 @@ ALBUMENTATIONS_REGISTRY = {
     "Normalize": A.Normalize,
     "RandomRotate90": A.RandomRotate90,
     "ColorJitter": A.ColorJitter,
+    "CenterCrop": A.CenterCrop,
 }
 
 AUGRAPHY_REGISTRY = {
@@ -46,6 +47,7 @@ AUGRAPHY_REGISTRY = {
     "LightingGradient": ag.LightingGradient,
     "BadPhotoCopy": ag.BadPhotoCopy,
     "ShadowCast": ag.ShadowCast,
+    "NoiseTexturize": ag.NoiseTexturize,
 }
 
 ALL_REGISTRIES = {

@@ -17,14 +17,19 @@ transforms:
       params: { p: 0.4 }
     - backend: augraphy
       name: DirtyDrum
-    - backend: augraphy
-      name: LowLightNoise
+      params: { p: 0.5 }
     - backend: augraphy
       name: LightingGradient
+      params: { p: 0.5 }
     - backend: augraphy
       name: BadPhotoCopy
+      params: { p: 0.5 }
     - backend: augraphy
       name: ShadowCast
+      params: { p: 0.5 }
+    - backend: augraphy
+      name: NoiseTexturize
+      params: { p: 0.5 }
 
     # 2단계: Albumentations로 기하학적/색상 증강
     - backend: albumentations
@@ -71,15 +76,23 @@ transforms:
           - backend: augraphy
             name: LowInkRandomLines
     - backend: augraphy
-      name: DirtyDrum
+      name: BleedThrough
+      params: { p: 0.4 }
     - backend: augraphy
-      name: LowLightNoise
+      name: DirtyDrum
+      params: { p: 0.5 }
     - backend: augraphy
       name: LightingGradient
+      params: { p: 0.5 }
     - backend: augraphy
       name: BadPhotoCopy
+      params: { p: 0.5 }
     - backend: augraphy
       name: ShadowCast
+      params: { p: 0.5 }
+    - backend: augraphy
+      name: NoiseTexturize
+      params: { p: 0.5 }
 
     - backend: torchvision
       name: Resize

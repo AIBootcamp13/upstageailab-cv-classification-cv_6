@@ -12,10 +12,11 @@ from utils.korean_matplot_setting import set_korean_font
 
 
 class WandbLogger:
-    def __init__(self, project_name="my-project", run_name=None, config=None, save_path=None):
+    def __init__(self, project_name="my-project", run_name: str=None, config: dict=None, group: str=None, save_path=None):
         self.project = project_name
         self.name = run_name
         self.config = config or {}
+        self.group = group
         self.save_path = save_path or "checkpoint.pth"
         load_dotenv()
         self.init()
@@ -36,6 +37,7 @@ class WandbLogger:
             id=None, # 이전 run_id 재사용하지 않기
             resume=False,  # 반드시 새로운 run 시작
             reinit=True,  # 커널 재시작 환경에서 안전하게 새로 시작!
+            group=self.group
         )
         set_korean_font()
 
