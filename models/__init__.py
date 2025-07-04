@@ -7,6 +7,8 @@ from models.Efficientnet_b3 import EfficientNetB3Model
 from models.Efficientnet_b4 import EfficientNetB4Model
 from models.Efficientnet_b5 import EfficientNetB5Model
 from models.Efficientnet_b3_head_arc import EfficientNetB3ArcFace
+from models.Efficientnet_v2_b3 import EfficientNetV2B3Model
+from models.Efficientnet_v2_b3_head_arc import EfficientNetV2B3ArcFaceModel
 
 __all__ = ['Resnet18Model', 'Resnet50HeadArc']
 
@@ -18,6 +20,8 @@ MODEL_REGISTRY: 'dict[str, torch.nn.Module]' = {
     "EfficientNetB4Model": EfficientNetB4Model,
     "EfficientNetB5Model": EfficientNetB5Model,
     "EfficientNetB3ArcFace": EfficientNetB3ArcFace,
+    "EfficientNetV2B3Model": EfficientNetV2B3Model,
+    "EfficientNetV2B3ArcFaceModel": EfficientNetV2B3ArcFaceModel
 }
 
 def get_model(name: str) -> torch.nn.Module:

@@ -51,6 +51,7 @@ class EfficientNetB3ArcFace(nn.Module):
         else:
             # 추론: 단순 코사인 유사도 계산 (마진 없음)
             logits = F.linear(F.normalize(features), F.normalize(self.head.weight))
+            logits *= self.head.s
             
         return logits
 

@@ -47,7 +47,7 @@ class WandbLogger:
         else:
             wandb.log(metrics_dict)
 
-    def log_predictions(self, images, preds, labels, class_names=None, max_samples=16, step=None):
+    def log_predictions(self, images, labels, preds, class_names=None, max_samples=16, step=None):
         """이미지 예측 결과 시각화"""
         log_imgs = []
         for i in range(min(len(images), max_samples)):
@@ -63,7 +63,7 @@ class WandbLogger:
         
         wandb.log({"predictions": log_imgs}, step=step)
 
-    def log_confusion_matrix(self, preds, labels, class_names=None, step=None):
+    def log_confusion_matrix(self, labels, preds, class_names=None, step=None):
         cm = confusion_matrix(labels, preds)
         plt.figure(figsize=(8,6))
         sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
@@ -76,7 +76,7 @@ class WandbLogger:
         wandb.log({"confusion_matrix": wandb.Image(plt)}, step=step)
         plt.close()
         
-    def log_failed_predictions(self, images, preds, labels, image_names=None, class_names=None, max_samples=16, step=None):
+    def log_failed_predictions(self, images, labels, preds, image_names=None, class_names=None, max_samples=16, step=None):
         """정답을 틀린 경우에만 이미지 로그"""
         failed_imgs = []
         for i in range(len(images)):

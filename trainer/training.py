@@ -1,24 +1,33 @@
+import numpy as np
 from tqdm import tqdm
 import torch
 from sklearn.metrics import f1_score
-from torch.cuda.amp import autocast, GradScaler
+from torch.cuda.amp import autocast
+
+from datasets.shack import cutmix_data, mixup_criterion
 
 
 def training(model, dataloader, train_dataset, criterion, optimizer, device, epoch, num_epochs):
   model.train()  # 모델을 학습 모드로 설정
   train_loss = 0.0
   train_accuracy = 0
-  preds_list = []
-  targets_list = []
+  all_preds_list = []
+  all_labels_list = []
 
   tbar = tqdm(dataloader)
   for images, labels, _ in tbar:
       images = images.to(device)
       labels = labels.to(device)
-
-      # 순전파
-      outputs = model(images, labels)
-      loss = criterion(outputs, labels)
+      
+    # 순전파
+    # 50% 확률로 CutMix 적용
+      if np.random.rand() < 0.5:
+          mixed_inputs, targets_a, targets_b, lam = cutmix_data(images, labels, alpha=1.0)
+          outputs = model(mixed_inputs, labels)
+          loss = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
+      else:
+          outputs = model(images, labels)
+          loss = criterion(outputs, labels)
 
       # 역전파 및 가중치 업데이트
       optimizer.zero_grad()
@@ -30,8 +39,8 @@ def training(model, dataloader, train_dataset, criterion, optimizer, device, epo
       # torch.max에서 dim 인자에 값을 추가할 경우, 해당 dimension에서 최댓값과 최댓값에 해당하는 인덱스를 반환
       _, predicted = torch.max(outputs, 1)
       train_accuracy += (predicted == labels).sum().item()
-      preds_list.extend(outputs.argmax(dim=1).detach().cpu().numpy())
-      targets_list.extend(labels.detach().cpu().numpy())
+      all_preds_list.extend(predicted.detach().cpu().numpy())
+      all_labels_list.extend(labels.detach().cpu().numpy())
 
       # tqdm의 진행바에 표시될 설명 텍스트를 설정
       tbar.set_description(f"Epoch [{epoch}/{num_epochs}], Train Loss: {loss.item():.4f}")
@@ -39,9 +48,9 @@ def training(model, dataloader, train_dataset, criterion, optimizer, device, epo
   # 에폭별 학습 결과 출력
   train_loss = train_loss / len(dataloader)
   train_accuracy = train_accuracy / len(train_dataset)
-  train_f1 = f1_score(targets_list, preds_list, average='macro')
-  
-  
+  train_f1 = f1_score(all_labels_list, all_preds_list, average='macro')
+
+
   ret = {
       "train_loss": train_loss,
       "train_accuracy": train_accuracy,
@@ -51,14 +60,12 @@ def training(model, dataloader, train_dataset, criterion, optimizer, device, epo
   return model, ret
 
 
-def training_use_amp(model, dataloader, train_dataset, criterion, optimizer, device, epoch, num_epochs):
+def training_use_amp(model, dataloader, train_dataset, criterion, optimizer, device, epoch, num_epochs, scaler):
   model.train()  # 모델을 학습 모드로 설정
   train_loss = 0.0
   train_accuracy = 0
-  preds_list = []
-  targets_list = []
-  
-  scaler = GradScaler()  # ⚖️ 스케일러 초기화
+  all_preds_list = []
+  all_labels_list = []
 
   tbar = tqdm(dataloader)
   for images, labels, _ in tbar:
@@ -69,9 +76,16 @@ def training_use_amp(model, dataloader, train_dataset, criterion, optimizer, dev
       
       # 🔥 autocast로 float16 사용
       with autocast():
-          outputs = model(images, labels)
-          loss = criterion(outputs, labels)
-          
+          # 50% 확률로 CutMix 적용
+          if np.random.rand() < 0.5:
+              mixed_inputs, targets_a, targets_b, lam = cutmix_data(images, labels, alpha=1.0)
+              outputs = model(mixed_inputs, labels)
+              loss = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
+          else:
+              outputs = model(images, labels)
+              loss = criterion(outputs, labels)
+      
+      
       # ⚙️ AMP-aware backward + step
       scaler.scale(loss).backward()
       scaler.step(optimizer)
@@ -83,8 +97,8 @@ def training_use_amp(model, dataloader, train_dataset, criterion, optimizer, dev
       # torch.max에서 dim 인자에 값을 추가할 경우, 해당 dimension에서 최댓값과 최댓값에 해당하는 인덱스를 반환
       _, predicted = torch.max(outputs, 1)
       train_accuracy += (predicted == labels).sum().item()
-      preds_list.extend(outputs.argmax(dim=1).detach().cpu().numpy())
-      targets_list.extend(labels.detach().cpu().numpy())
+      all_preds_list.extend(predicted.detach().cpu().numpy())
+      all_labels_list.extend(labels.detach().cpu().numpy())
 
       # tqdm의 진행바에 표시될 설명 텍스트를 설정
       tbar.set_description(f"Epoch [{epoch}/{num_epochs}], Train Loss: {loss.item():.4f}")
@@ -92,7 +106,7 @@ def training_use_amp(model, dataloader, train_dataset, criterion, optimizer, dev
   # 에폭별 학습 결과 출력
   train_loss = train_loss / len(dataloader)
   train_accuracy = train_accuracy / len(train_dataset)
-  train_f1 = f1_score(targets_list, preds_list, average='macro')
+  train_f1 = f1_score(all_labels_list, all_preds_list, average='macro')
   
   
   ret = {

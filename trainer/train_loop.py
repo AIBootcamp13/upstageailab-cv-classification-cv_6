@@ -1,18 +1,17 @@
 import torch
 from torch import optim
 
-from trainer.training import training, training_use_amp
-from trainer.evaluation import evaluation, evaluation_use_amp
+from trainer.evaluation import evaluation
 from utils.EarlyStopping import EarlyStopping
 from trainer.wandb_logger import WandbLogger
 
 
-def training_loop(model, train_dataloader, valid_dataloader, train_dataset, val_dataset, criterion, optimizer, device, num_epochs, early_stopping: EarlyStopping, logger: WandbLogger, class_names, scheduler: optim.lr_scheduler._LRScheduler=None):
+def training_loop(training_fn, model, train_dataloader, valid_dataloader, train_dataset, val_dataset, criterion, optimizer, device, num_epochs, early_stopping: EarlyStopping, logger: WandbLogger, class_names, scheduler: optim.lr_scheduler._LRScheduler=None, training_args: dict=None):
     valid_max_accuracy = -1
     start_epoch = 1
 
     for epoch in range(start_epoch, num_epochs):
-        model, train_ret = training(model, train_dataloader, train_dataset, criterion, optimizer, device, epoch, num_epochs)
+        model, train_ret = training_fn(model, train_dataloader, train_dataset, criterion, optimizer, device, epoch, num_epochs, **training_args)
         model, valid_ret = evaluation(model, valid_dataloader, val_dataset, criterion, device, epoch, num_epochs, class_names, logger)
 
         if valid_ret["valid_accuracy"] > valid_max_accuracy:
@@ -23,7 +22,8 @@ def training_loop(model, train_dataloader, valid_dataloader, train_dataset, val_
                 scheduler.step(valid_ret["valid_f1"])
                 # scheduler.step(valid_ret["valid_loss"])
             else:
-                scheduler.step(epoch)  # CosineWarmRestart 등은 epoch 기반
+                scheduler.step(epoch - 1)  # CosineWarmRestart 등은 epoch 0번부터 시작하는거 기반
+                # scheduler.step()  # 이것도 좋을 수 있다고함.
         
 
         # early stopping 및 check point에서 모델 저장
@@ -58,6 +58,3 @@ def training_loop(model, train_dataloader, valid_dataloader, train_dataset, val_
     logger.finish()
     
     return model, valid_max_accuracy
-
-
-

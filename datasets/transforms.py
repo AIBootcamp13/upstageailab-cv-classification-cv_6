@@ -1,4 +1,7 @@
 __all__ = ['TRANSFORM_REGISTRY', 'load_transforms_from_yaml']
+import importlib
+import enum
+
 import numpy as np
 from PIL import Image
 import yaml
@@ -31,8 +34,10 @@ ALBUMENTATIONS_REGISTRY = {
     "RandomBrightnessContrast": A.RandomBrightnessContrast,
     "Normalize": A.Normalize,
     "RandomRotate90": A.RandomRotate90,
+    "Rotate": A.Rotate,
     "ColorJitter": A.ColorJitter,
     "CenterCrop": A.CenterCrop,
+    "ImageCompression": A.ImageCompression, # 이미지 품질을 낮춰서 압축 손실을 시뮬레이션함
 }
 
 AUGRAPHY_REGISTRY = {
@@ -48,6 +53,10 @@ AUGRAPHY_REGISTRY = {
     "BadPhotoCopy": ag.BadPhotoCopy,
     "ShadowCast": ag.ShadowCast,
     "NoiseTexturize": ag.NoiseTexturize,
+    "Folding": ag.Folding,
+    "Geometric": ag.Geometric,
+    "SubtleNoise": ag.SubtleNoise,
+    
 }
 
 ALL_REGISTRIES = {
@@ -67,7 +76,10 @@ class UnifiedCompose:
         self.transforms = transforms
 
     def __call__(self, img):
-        # 최초 입력은 NumPy 배열이라고 가정
+        # 최초 입력이 PIL 이면 NumPy로 변환
+        if isinstance(img, Image.Image):
+            img = np.array(img)
+        
         is_pil = False
         original_img = img
 
@@ -120,9 +132,56 @@ class UnifiedCompose:
     def __getitem__(self, index):
         """이 클래스가 my_object[index]와 같은 인덱싱을 지원하도록 합니다."""
         return self.transforms[index]
+    
 
-# 3. YAML 리스트로부터 통합 파이프라인을 만드는 빌더 함수
-def build_unified_transforms(transform_list):
+def _resolve_params(params: dict) -> dict:
+    """
+    파라미터 딕셔너리를 순회하며 '_resolve_' 키가 있는 항목을
+    실제 파이썬 객체로 변환하는 범용 헬퍼 함수.
+    """
+    resolved_params = {}
+    for key, value in params.items():
+        if isinstance(value, dict) and '_resolve_' in value:
+            resolver_info = value['_resolve_']
+            resolver_type = resolver_info['type']  # 'enum' 또는 'tuple'
+            val_to_resolve = resolver_info['value']
+
+            # ⬇️ type 값에 따라 분기하여 처리
+            if resolver_type == "enum":
+                class_path_str = resolver_info['class_path']
+                try:
+                    module_path, class_name = class_path_str.rsplit('.', 1)
+                    module = importlib.import_module(module_path)
+                    resolver_class = getattr(module, class_name)
+                except (ImportError, AttributeError) as e:
+                    raise ValueError(f"Could not resolve class path: {class_path_str}") from e
+
+                if issubclass(resolver_class, enum.Enum):
+                    resolved_params[key] = resolver_class[val_to_resolve]
+                else:
+                    raise TypeError(f"Class for enum resolver is not an Enum: {resolver_class}")
+
+            elif resolver_type == "tuple":
+                # value(리스트)를 튜플 객체로 변환
+                if not isinstance(val_to_resolve, list):
+                    raise TypeError("Value for tuple resolver must be a list in YAML.")
+                resolved_params[key] = tuple(val_to_resolve)
+
+            else:
+                raise TypeError(f"Unsupported resolver type: {resolver_type}")
+        else:
+            # 일반 파라미터는 그대로 복사
+            resolved_params[key] = value
+            
+    return resolved_params
+
+
+# --- 3. YAML 리스트로부터 통합 파이프라인을 만드는 빌더 함수 (수정된 버전) ---
+def build_unified_transforms(transform_list: list):
+    """
+    YAML 설정으로부터 변환 파이프라인을 만드는 범용 빌더 함수.
+    OneOf를 포함한 모든 변환의 파라미터를 동적으로 변환합니다.
+    """
     if not transform_list:
         return None
         
@@ -131,16 +190,30 @@ def build_unified_transforms(transform_list):
         backend = item["backend"]
         name = item["name"]
         params = item.get("params", {}).copy()
+
+        # ❗️ 1. 파라미터 변환을 if/else 분기 앞으로 이동하여 모든 경우에 적용
+        resolved_params = _resolve_params(params)
+
+        if name == 'OneOf':
+            # ❗️ 2. 이제 resolved_params에서 "transforms" 리스트를 가져와야 함
+            nested_ops_config = resolved_params.pop("transforms")
+            nested_ops_list = build_unified_transforms(nested_ops_config).transforms
+            
+            if backend == "albumentations":
+                one_of_cls = A.OneOf
+            elif backend == "augraphy":
+                one_of_cls = ag.OneOf
+            else:
+                raise ValueError(f"OneOf is not supported for backend: {backend}")
+            
+            # ❗️ 3. 변환이 완료된 resolved_params를 OneOf 생성에 사용
+            ops.append(one_of_cls(nested_ops_list, **resolved_params))
         
-        transform_cls = ALL_REGISTRIES[backend][name]
-        
-        # 'OneOf' 같은 중첩 구조를 재귀적으로 처리
-        if "transforms" in params:
-            nested_ops_config = params.pop("transforms")
-            nested_ops = build_unified_transforms(nested_ops_config) # 재귀 호출
-            ops.append(transform_cls(nested_ops, **params))
-        else:
-            ops.append(transform_cls(**params))
+        else: # 일반 변환
+            if backend and name:
+                transform_cls = ALL_REGISTRIES[backend][name]
+                # ❗️ 4. 여기서도 동일하게 resolved_params를 사용
+                ops.append(transform_cls(**resolved_params))
             
     return UnifiedCompose(ops)
 

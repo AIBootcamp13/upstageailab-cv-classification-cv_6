@@ -5,7 +5,7 @@ import torch
 import pandas as pd
 import numpy as np
 import torch.nn as nn
-from torch.optim import Adam, AdamW
+from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 
 from config.config import load_config
@@ -18,7 +18,7 @@ from models import get_model
 from utils.EarlyStopping import EarlyStopping
 from utils.scheduler_factory import get_scheduler
 from utils.optimizer_factory import get_optimizer
-from trainer.train_loop import training_loop
+from trainer import *
 from trainer.wandb_logger import WandbLogger
 
 
@@ -34,6 +34,8 @@ DatasetClass = get_dataset(cfg['DATASET'])
 ModelClass = get_model(cfg['MODEL'])
 cfg_scheduler = cfg["scheduler"]
 cfg_optimizer = cfg["optimizer"]
+
+training_fn = TRAINING_REGISTRY[cfg['training_mode']]
 
 
 # device
@@ -144,7 +146,10 @@ def train_block():
     # load model
     model: nn.Module = ModelClass(num_classes=num_classes).to(device)
     
-    params_to_update = unfreeze(model)
+    if cfg["use_unfreeze"]:
+        params_to_update = unfreeze(model)
+    else:
+        params_to_update = model.parameters()
     
     early_stopping = EarlyStopping(patience=cfg["patience"], delta=cfg["delta"], verbose=True, save_path=save_path, mode='max')
 
@@ -157,8 +162,18 @@ def train_block():
     # 스케쥴러
     Scheduler = get_scheduler(cfg_scheduler["name"], optimizer, cfg_scheduler['params'])
 
-    model, valid_max_accuracy = training_loop(model, train_loader, val_loader, train_dataset, val_dataset, criterion, optimizer, device, cfg["EPOCHS"], early_stopping, logger, class_names, Scheduler)
+    # amp를 위한 scaler 준비
+    training_args = {}
+    if cfg["training_mode"] == 'on_amp':
+        training_args['scaler'] = GradScaler()
 
+    model, valid_max_accuracy = training_loop(
+        training_fn,
+        model, train_loader, val_loader, train_dataset, val_dataset, 
+        criterion, optimizer, device, cfg["EPOCHS"], 
+        early_stopping, logger, class_names, Scheduler,
+        training_args,
+        )
     return model, valid_max_accuracy
 
     
@@ -205,5 +220,16 @@ if __name__ == "__main__":
 
     # 스케쥴러
     Scheduler = get_scheduler(cfg_scheduler["name"], optimizer, cfg_scheduler['params'])
+    
+    # amp를 위한 scaler 준비
+    training_args = {}
+    if cfg["training_mode"] == 'on_amp':
+        training_args['scaler'] = GradScaler()
 
-    model, valid_max_accuracy = training_loop(model, train_loader, val_loader, train_dataset, val_dataset, criterion, optimizer, device, cfg["EPOCHS"], early_stopping, logger, class_names, Scheduler)
+    model, valid_max_accuracy = training_loop(
+        training_fn,
+        model, train_loader, val_loader, train_dataset, val_dataset, 
+        criterion, optimizer, device, cfg["EPOCHS"], 
+        early_stopping, logger, class_names, Scheduler,
+        training_args,
+        )

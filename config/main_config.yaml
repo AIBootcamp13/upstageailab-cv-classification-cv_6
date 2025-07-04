@@ -1,18 +1,20 @@
 BATCH_SIZE: 16
 EPOCHS: 100
 SEED: 42
+use_unfreeze: True
 num_blocks_to_unfreeze: 3 # 모델의 피처 부분을 얼마나 더 학습시킬 것인지 ( b3는 0 ~ 6개까지 지원한다고함!! )
 patience: 20 # 조기 종료
 delta: 0.01 # 개선이라고 간주하는 값
 DATASET: FastImageDataset
-MODEL: EfficientNetB3ArcFace
+MODEL: EfficientNetV2B3ArcFaceModel
+training_mode: on_amp # on_amp, normal
 TRANSFORMS_PATH: config/transforms_config.yaml
 
 optimizer:
-  name: Adam
+  name: AdamW
   params: {
     lr: 0.0001,
-    weight_decay: 0, # L2 규제를 어느정도로 줄 것인지( 일반적으로 0.1, 0.01 이런식으로 테스트해본다고 함!)
+    weight_decay: 0.01, # L2 규제를 어느정도로 줄 것인지( 일반적으로 0.1, 0.01 이런식으로 테스트해본다고 함!)
   }
 
 scheduler:
