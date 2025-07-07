@@ -29,19 +29,19 @@ class EfficientNetV2B3ArcFaceModel(nn.Module):
             in_features=embedding_size,
             out_features=num_classes,
             s=30.0,  # 하이퍼파라미터, 조절 가능
-            m=0.5   # 하이퍼파라미터, 조절 가능
+            m=0.55   # 하이퍼파라미터, 조절 가능
         )
 
     def forward(self, x, labels=None):
         # 1. Backbone을 통해 특징 추출
         features = self.backbone(x)
         
-        # ✅ 2. Neck을 통과시켜 최종 임베딩 생성
+        # 2. Neck을 통과시켜 최종 임베딩 생성
         embedding = self.neck(features)
 
         # 3. Head를 통해 로짓 계산
         if labels is not None:
-            # ✅ Neck의 출력인 'embedding'을 head에 전달
+            # Neck의 출력인 'embedding'을 head에 전달
             output = self.head(embedding, labels)
         else:
             # 추론 시에도 정규화된 'embedding'을 사용

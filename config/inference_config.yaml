@@ -1,0 +1,16 @@
+BATCH_SIZE: 16
+SEED: 42
+DATASET: FastImageDataset
+TRANSFORMS_PATH: config/transforms_config.yaml
+
+MODEL_A: 
+  name: EfficientNetV2MArcFaceModel
+
+MODEL_B:
+  name: ResNeStModelArcFaceModel
+
+MODEL_C:
+  name: ConvNeXtArcFaceModel
+
+MODEL_D:
+  name: SwinTransformerArcFaceModel

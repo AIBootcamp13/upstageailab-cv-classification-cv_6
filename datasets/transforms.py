@@ -191,11 +191,11 @@ def build_unified_transforms(transform_list: list):
         name = item["name"]
         params = item.get("params", {}).copy()
 
-        # ❗️ 1. 파라미터 변환을 if/else 분기 앞으로 이동하여 모든 경우에 적용
+        # 1. 파라미터 변환을 if/else 분기 앞으로 이동하여 모든 경우에 적용
         resolved_params = _resolve_params(params)
 
         if name == 'OneOf':
-            # ❗️ 2. 이제 resolved_params에서 "transforms" 리스트를 가져와야 함
+            # 2. 이제 resolved_params에서 "transforms" 리스트를 가져와야 함
             nested_ops_config = resolved_params.pop("transforms")
             nested_ops_list = build_unified_transforms(nested_ops_config).transforms
             
@@ -206,13 +206,13 @@ def build_unified_transforms(transform_list: list):
             else:
                 raise ValueError(f"OneOf is not supported for backend: {backend}")
             
-            # ❗️ 3. 변환이 완료된 resolved_params를 OneOf 생성에 사용
+            # 3. 변환이 완료된 resolved_params를 OneOf 생성에 사용
             ops.append(one_of_cls(nested_ops_list, **resolved_params))
         
         else: # 일반 변환
             if backend and name:
                 transform_cls = ALL_REGISTRIES[backend][name]
-                # ❗️ 4. 여기서도 동일하게 resolved_params를 사용
+                # 4. 여기서도 동일하게 resolved_params를 사용
                 ops.append(transform_cls(**resolved_params))
             
     return UnifiedCompose(ops)

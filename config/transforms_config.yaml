@@ -172,7 +172,6 @@ transforms:
     - backend: albumentations
       name: Resize
       params: { height: 640, width: 640 }
-     # CenterCrop이 필요하다면 추가
     - backend: albumentations
       name: CenterCrop
       params: { height: 640, width: 640 }
@@ -188,7 +187,6 @@ transforms:
     - backend: albumentations
       name: Resize
       params: { height: 640, width: 640 }
-     # CenterCrop이 필요하다면 추가
     - backend: albumentations
       name: CenterCrop
       params: { height: 640, width: 640 }

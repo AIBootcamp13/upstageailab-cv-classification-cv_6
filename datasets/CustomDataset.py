@@ -11,7 +11,7 @@ import albumentations as A
 
 class CustomImageDataset(Dataset):
     def __init__(self, csv, path, transform=None):
-        self.df = pd.read_csv(csv).values
+        self.df = pd.read_csv(csv)
         self.path = path
         self.transform = transform
 
@@ -19,15 +19,14 @@ class CustomImageDataset(Dataset):
         return len(self.df)
 
     def __getitem__(self, idx):
-        name, target = self.df[idx]
+        row = self.df.iloc[idx]
+        name = row["ID"]
+        target = row["target"]
+        
         img = np.array(Image.open(os.path.join(self.path, name)))
         
         if self.transform:
-            if isinstance(self.transform, A.BasicTransform) or isinstance(self.transform, A.Compose):
-                img = self.transform(image=img)["image"]
-            elif isinstance(self.transform, transforms.Compose):
-                img = Image.fromarray(img)
-                img = self.transform(img)
+            img = self.transform(img)
 
 
-        return img, target
+        return img, target, name

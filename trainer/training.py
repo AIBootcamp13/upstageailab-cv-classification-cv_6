@@ -13,6 +13,7 @@ def training(model, dataloader, train_dataset, criterion, optimizer, device, epo
   train_accuracy = 0
   all_preds_list = []
   all_labels_list = []
+  use_cutmix = np.random.rand() < 0.5
 
   tbar = tqdm(dataloader)
   for images, labels, _ in tbar:
@@ -21,7 +22,7 @@ def training(model, dataloader, train_dataset, criterion, optimizer, device, epo
       
     # 순전파
     # 50% 확률로 CutMix 적용
-      if np.random.rand() < 0.5:
+      if use_cutmix:
           mixed_inputs, targets_a, targets_b, lam = cutmix_data(images, labels, alpha=1.0)
           outputs = model(mixed_inputs, labels)
           loss = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
@@ -38,7 +39,14 @@ def training(model, dataloader, train_dataset, criterion, optimizer, device, epo
       train_loss += loss.item()
       # torch.max에서 dim 인자에 값을 추가할 경우, 해당 dimension에서 최댓값과 최댓값에 해당하는 인덱스를 반환
       _, predicted = torch.max(outputs, 1)
-      train_accuracy += (predicted == labels).sum().item()
+      
+      # CutMix가 적용되었을 때와 아닐 때를 구분하여 정확도 계산
+      if use_cutmix: # CutMix가 적용된 경우
+          correct_predictions = lam * (predicted == targets_a.data).sum().item() + (1 - lam) * (predicted == targets_b.data).sum().item()
+          train_accuracy += correct_predictions
+      else: # 일반적인 경우
+          train_accuracy += (predicted == labels).sum().item()
+
       all_preds_list.extend(predicted.detach().cpu().numpy())
       all_labels_list.extend(labels.detach().cpu().numpy())
 
@@ -66,6 +74,7 @@ def training_use_amp(model, dataloader, train_dataset, criterion, optimizer, dev
   train_accuracy = 0
   all_preds_list = []
   all_labels_list = []
+  use_cutmix = np.random.rand() < 0.5
 
   tbar = tqdm(dataloader)
   for images, labels, _ in tbar:
@@ -77,7 +86,7 @@ def training_use_amp(model, dataloader, train_dataset, criterion, optimizer, dev
       # 🔥 autocast로 float16 사용
       with autocast():
           # 50% 확률로 CutMix 적용
-          if np.random.rand() < 0.5:
+          if use_cutmix:
               mixed_inputs, targets_a, targets_b, lam = cutmix_data(images, labels, alpha=1.0)
               outputs = model(mixed_inputs, labels)
               loss = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
@@ -96,7 +105,14 @@ def training_use_amp(model, dataloader, train_dataset, criterion, optimizer, dev
       train_loss += loss.item()
       # torch.max에서 dim 인자에 값을 추가할 경우, 해당 dimension에서 최댓값과 최댓값에 해당하는 인덱스를 반환
       _, predicted = torch.max(outputs, 1)
-      train_accuracy += (predicted == labels).sum().item()
+
+      # CutMix가 적용되었을 때와 아닐 때를 구분하여 정확도 계산
+      if use_cutmix: # CutMix가 적용된 경우
+          correct_predictions = lam * (predicted == targets_a.data).sum().item() + (1 - lam) * (predicted == targets_b.data).sum().item()
+          train_accuracy += correct_predictions
+      else: # 일반적인 경우
+          train_accuracy += (predicted == labels).sum().item()
+
       all_preds_list.extend(predicted.detach().cpu().numpy())
       all_labels_list.extend(labels.detach().cpu().numpy())
 
