@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from models.ArcMarginProduct import ArcMarginProduct
 
 class ResNet50ArcFaceModel(nn.Module):
-    def __init__(self, num_classes, pretrained=True, embedding_size=512):
+    def __init__(self, num_classes, pretrained=True, embedding_size=512, s=30.0, m=0.55):
         """
         ResNet50 백본과 ArcFace 헤드를 사용하는 모델입니다.
 
@@ -35,8 +35,8 @@ class ResNet50ArcFaceModel(nn.Module):
         self.head = ArcMarginProduct(
             in_features=embedding_size,
             out_features=num_classes,
-            s=30.0,  # ArcFace의 scale 파라미터 (조정 가능)
-            m=0.55   # ArcFace의 margin 파라미터 (조정 가능)
+            s=s,  # ArcFace의 scale 파라미터 (조정 가능)
+            m=m   # ArcFace의 margin 파라미터 (조정 가능)
         )
 
     def forward(self, x, labels=None):

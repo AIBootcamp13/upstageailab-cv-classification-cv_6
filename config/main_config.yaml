@@ -3,13 +3,13 @@ EPOCHS: 100
 SEED: 42
 use_unfreeze: True
 num_blocks_to_unfreeze: 4 # 모델의 피처 부분을 얼마나 더 학습시킬 것인지
-model_type: resnet # efficientnet, resnet, convnext, swin
+model_type: convnext # efficientnet, resnet, convnext, swin
 backbone_lr: 0.00001
 use_differential_lr: True
 patience: 20 # 조기 종료
 delta: 0.01 # 개선이라고 간주하는 값
 DATASET: FastImageDataset
-MODEL: ResNeSt101eModelArcFaceModel
+MODEL: ConvNeXtArcFaceModel
 training_mode: on_amp # on_amp, normal
 TRANSFORMS_PATH: config/transforms_config.yaml
 
@@ -31,5 +31,6 @@ scheduler:
 loss:
   name: FocalLoss
   params: {
-    gamma: 2.0
+    gamma: 2.0,
+    label_smoothing: 0.1
   }

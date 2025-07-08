@@ -9,7 +9,7 @@ from models.ArcMarginProduct import ArcMarginProduct
 
 
 class SwinTransformerArcFaceModel(nn.Module):
-    def __init__(self, num_classes, pretrained=True, embedding_size=512):
+    def __init__(self, num_classes, pretrained=True, embedding_size=512, s=30.0, m=0.55):
         super(SwinTransformerArcFaceModel, self).__init__()
 
         # 1. Backbone: Swin Transformer
@@ -32,8 +32,8 @@ class SwinTransformerArcFaceModel(nn.Module):
         self.head = ArcMarginProduct(
             in_features=embedding_size,
             out_features=num_classes,
-            s=30.0,
-            m=0.55
+            s=s,
+            m=m
         )
 
     def forward(self, x, labels=None):

@@ -7,7 +7,7 @@ MODEL_A:
   name: EfficientNetV2MArcFaceModel
 
 MODEL_B:
-  name: ResNeStModelArcFaceModel
+  name: ResNeSt50ModelArcFaceModel
 
 MODEL_C:
   name: ConvNeXtArcFaceModel

@@ -7,7 +7,7 @@ from models.ArcMarginProduct import ArcMarginProduct
 
 
 class EfficientNetB3ArcFace(nn.Module):
-    def __init__(self, num_classes, embedding_size=512):
+    def __init__(self, num_classes, embedding_size=512, s=30.0, m=0.55):
         """
         EfficientNet-B3를 백본으로 사용하는 ArcFace 모델
         :param num_classes: 최종 분류할 클래스의 개수
@@ -30,7 +30,7 @@ class EfficientNetB3ArcFace(nn.Module):
         )
         
         # 3. Head: ArcFace 헤드
-        self.head = ArcMarginProduct(embedding_size, num_classes)
+        self.head = ArcMarginProduct(embedding_size, num_classes, s=s, m=m)
 
     def forward(self, x, labels=None):
         """

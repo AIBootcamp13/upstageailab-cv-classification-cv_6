@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from models.ArcMarginProduct import ArcMarginProduct  # ArcMarginProduct 클래스를 import
 
 class ResNeSt50ModelArcFaceModel(nn.Module):
-    def __init__(self, num_classes, pretrained=True, embedding_size=512):
+    def __init__(self, num_classes, pretrained=True, embedding_size=512, s=30.0, m=0.55):
         super(ResNeSt50ModelArcFaceModel, self).__init__()
         
         # 1. Backbone: EfficientNetV2-M
@@ -21,15 +21,16 @@ class ResNeSt50ModelArcFaceModel(nn.Module):
         self.neck = nn.Sequential(
             nn.Linear(backbone_output_features, embedding_size),
             nn.BatchNorm1d(embedding_size),
-            nn.ReLU()
+            nn.ReLU(),
+            nn.Dropout(0.5),
         )
         
         # 3. Head: ArcFace
         self.head = ArcMarginProduct(
             in_features=embedding_size,
             out_features=num_classes,
-            s=30.0,
-            m=0.55
+            s=s,
+            m=s
         )
 
     def forward(self, x, labels=None):

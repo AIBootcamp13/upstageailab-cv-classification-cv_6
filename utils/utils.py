@@ -1,9 +1,10 @@
-__all__ = ['set_seed', 'makedirs']
+__all__ = ['set_seed', 'makedirs', 'get_yaml']
 import os
 import random
 
 import numpy as np
 import torch
+import yaml
 
 def set_seed(seed):
     random.seed(seed)
@@ -20,3 +21,9 @@ def makedirs(path):
     if not os.path.exists(path):
         os.makedirs(path)
     print('폴더 확인 완료!!')
+    
+def get_yaml(path):
+    with open(path, "r") as f:
+        data = yaml.safe_load(f)
+    
+    return data
