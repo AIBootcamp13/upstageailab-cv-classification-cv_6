@@ -9,7 +9,7 @@ from models.ArcMarginProduct import ArcMarginProduct
 
 
 class ConvNeXtArcFaceModel(nn.Module):
-    def __init__(self, num_classes, pretrained=True, embedding_size=512, s=30.0, m=0.55):
+    def __init__(self, num_classes, pretrained=True, embedding_size=512, s=38.0, m=0.45):
         super(ConvNeXtArcFaceModel, self).__init__()
         
         # 1. Backbone: ConvNeXt
@@ -20,7 +20,8 @@ class ConvNeXtArcFaceModel(nn.Module):
         self.neck = nn.Sequential(
             nn.Linear(backbone_output_features, embedding_size),
             nn.BatchNorm1d(embedding_size),
-            nn.ReLU()
+            nn.ReLU(),
+            nn.Dropout(0.5),
         )
         
         # 3. Head: ArcFace
@@ -37,13 +38,14 @@ class ConvNeXtArcFaceModel(nn.Module):
         
         # Neck을 통과하여 최종 임베딩 벡터 생성
         embedding = self.neck(features)
+        embedding = F.normalize(embedding, p=2, dim=1)
         
-        # 학습 시에는 레이블을 사용하여 ArcFace 손실 계산
-        if self.training and labels is not None:
+        if self.training:
+            assert labels is not None, "Labels are required during training for ArcFace."
             output = self.head(embedding, labels)
-        # 추론 시에는 코사인 유사도 기반으로 로짓 계산
+            return embedding, output
         else:
             output = F.linear(F.normalize(embedding), F.normalize(self.head.weight))
             output *= self.head.s
-        
-        return output
+            
+            return output

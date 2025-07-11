@@ -5,7 +5,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from models.ArcMarginProduct import ArcMarginProduct  # ArcMarginProduct 클래스를 import
+from models.ArcMarginProduct import ArcMarginProduct
 
 class EfficientNetV2MArcFaceModel(nn.Module):
     def __init__(self, num_classes, pretrained=True, embedding_size=512, s=30.0, m=0.55):
@@ -37,10 +37,12 @@ class EfficientNetV2MArcFaceModel(nn.Module):
         features = self.backbone(x)
         embedding = self.neck(features)
         
-        if labels is not None:
+        if self.training:
+            assert labels is not None, "Labels are required during training for ArcFace."
             output = self.head(embedding, labels)
+            return output, embedding
         else:
             output = F.linear(F.normalize(embedding), F.normalize(self.head.weight))
             output *= self.head.s
-        
-        return output
+            
+            return output

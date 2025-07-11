@@ -44,16 +44,15 @@ class EfficientNetB3ArcFace(nn.Module):
         # Neck을 통과시켜 임베딩 벡터 생성
         features = self.neck(features)
         
-        # Head를 통과시켜 최종 로짓(logits) 계산
-        if labels is not None:
-            # 학습: ArcFace 마진 적용
-            logits = self.head(features, labels)
+        if self.training:
+            assert labels is not None, "Labels are required during training for ArcFace."
+            output = self.head(embedding, labels)
+            return output, embedding
         else:
-            # 추론: 단순 코사인 유사도 계산 (마진 없음)
-            logits = F.linear(F.normalize(features), F.normalize(self.head.weight))
-            logits *= self.head.s
+            output = F.linear(F.normalize(embedding), F.normalize(self.head.weight))
+            output *= self.head.s
             
-        return logits
+            return output
 
 
 if __name__ == '__main__':

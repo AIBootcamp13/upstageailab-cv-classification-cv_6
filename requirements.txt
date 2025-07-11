@@ -3,3 +3,4 @@ seaborn
 wandb
 dotenv
 augraphy
+pytorch-metric-learning

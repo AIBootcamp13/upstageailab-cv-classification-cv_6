@@ -24,7 +24,7 @@ def evaluation(model, dataloader, val_dataset, criterion, device, epoch, num_epo
             images = images.to(device)
             labels = labels.to(device)
             
-            outputs = model(images)
+            outputs = model(images, labels)
             loss = criterion(outputs, labels)
 
             valid_loss += loss.item()

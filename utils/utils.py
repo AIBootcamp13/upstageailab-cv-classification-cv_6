@@ -1,4 +1,4 @@
-__all__ = ['set_seed', 'makedirs', 'get_yaml']
+__all__ = ['set_seed', 'makedirs', 'get_yaml', 'seed_worker']
 import os
 import random
 
@@ -27,3 +27,9 @@ def get_yaml(path):
         data = yaml.safe_load(f)
     
     return data
+
+def seed_worker(worker_id):
+    """각 워커마다 고유하게 시드를 설정"""
+    seed = torch.initial_seed() % 2**32
+    np.random.seed(seed)
+    random.seed(seed)

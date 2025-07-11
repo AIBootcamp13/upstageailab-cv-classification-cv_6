@@ -10,12 +10,13 @@ from models.Efficientnet_b3_head_arc import EfficientNetB3ArcFace
 from models.Efficientnet_v2_b3 import EfficientNetV2B3Model
 from models.Efficientnet_v2_b3_head_arc import EfficientNetV2B3ArcFaceModel
 from models.Efficientnet_v2_m_head_arc import EfficientNetV2MArcFaceModel
-from models.ResnetSt50_head_arc import ResNeSt50ModelArcFaceModel
+from models.ResnetSt50_head_arc import ResNeSt50ArcFaceModel
 from models.ConvNeXt_haed_arc import ConvNeXtArcFaceModel
 from models.SwinTransformer_haed_arc import SwinTransformerArcFaceModel
 from models.ConvNeXtModel import ConvNeXtModel
 from models.ResnetSt101e_head_arc import ResNeSt101eModelArcFaceModel
 from models.ResnetSt200e_head_arc import ResNeSt200eModelArcFaceModel
+from models.ConvNeXt_haed_arc_single import ConvNeXtArcFaceSingleModel
 
 __all__ = ['Resnet18Model', 'Resnet50HeadArc']
 
@@ -30,12 +31,13 @@ MODEL_REGISTRY: 'dict[str, torch.nn.Module]' = {
     "EfficientNetV2B3Model": EfficientNetV2B3Model,
     "EfficientNetV2B3ArcFaceModel": EfficientNetV2B3ArcFaceModel,
     "EfficientNetV2MArcFaceModel": EfficientNetV2MArcFaceModel,
-    "ResNeSt50ModelArcFaceModel": ResNeSt50ModelArcFaceModel,
+    "ResNeSt50ArcFaceModel": ResNeSt50ArcFaceModel,
     "ConvNeXtArcFaceModel": ConvNeXtArcFaceModel,
     "SwinTransformerArcFaceModel": SwinTransformerArcFaceModel,
     "ConvNeXtModel": ConvNeXtModel,
     "ResNeSt101eModelArcFaceModel": ResNeSt101eModelArcFaceModel,
     "ResNeSt200eModelArcFaceModel": ResNeSt200eModelArcFaceModel,
+    "ConvNeXtArcFaceSingleModel": ConvNeXtArcFaceSingleModel,
 }
 
 def get_model(name: str) -> torch.nn.Module:

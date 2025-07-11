@@ -28,6 +28,6 @@ scheduler:
 scheduler:
   name: cosine
   params:
-    T_max: 10
+    T_max: 100
     eta_min: 0.000001
 ```

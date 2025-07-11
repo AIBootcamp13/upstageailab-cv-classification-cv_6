@@ -47,13 +47,12 @@ class ResNet50ArcFaceModel(nn.Module):
         embedding = self.neck(features)
         
         # 학습 시에는 레이블을 사용하여 ArcFace 손실 계산
-        if self.training and labels is not None:
+        if self.training:
+            assert labels is not None, "Labels are required during training for ArcFace."
             output = self.head(embedding, labels)
-        # 추론 시에는 코사인 유사도 기반으로 로짓 계산
+            return output, embedding
         else:
-            # 정규화된 임베딩과 정규화된 가중치 벡터 간의 코사인 유사도 계산
             output = F.linear(F.normalize(embedding), F.normalize(self.head.weight))
-            # ArcFace의 스케일(s)을 곱해줌 (추론 시 성능 향상에 도움)
             output *= self.head.s
-        
-        return output
+            
+            return output

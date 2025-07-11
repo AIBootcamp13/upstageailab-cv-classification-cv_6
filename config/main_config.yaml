@@ -1,32 +1,33 @@
-BATCH_SIZE: 16
+n_splits: 10
+BATCH_SIZE: 54
 EPOCHS: 100
 SEED: 42
 use_unfreeze: True
 num_blocks_to_unfreeze: 4 # 모델의 피처 부분을 얼마나 더 학습시킬 것인지
 model_type: convnext # efficientnet, resnet, convnext, swin
 backbone_lr: 0.00001
-use_differential_lr: True
-patience: 20 # 조기 종료
+use_differential_lr: False
+patience: 15 # 조기 종료
 delta: 0.01 # 개선이라고 간주하는 값
 DATASET: FastImageDataset
 MODEL: ConvNeXtArcFaceModel
 training_mode: on_amp # on_amp, normal
 TRANSFORMS_PATH: config/transforms_config.yaml
 
+triplet_loss_weight: 0.3
+
 optimizer:
   name: AdamW
   params: {
     lr: 0.0001,
-    weight_decay: 0.01, # L2 규제를 어느정도로 줄 것인지( 일반적으로 0.1, 0.01 이런식으로 테스트해본다고 함!)
+    weight_decay: 0.0001,
   }
 
 scheduler:
-  name: cosine_warm_restart
-  params: {
-        T_0: 20,
-        T_mult: 1,
-        eta_min: 0.0000001,
-    }
+  name: cosine
+  params:
+    T_max: 100
+    eta_min: 0.000001
 
 loss:
   name: FocalLoss
