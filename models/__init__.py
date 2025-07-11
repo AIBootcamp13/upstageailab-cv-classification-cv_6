@@ -14,6 +14,7 @@ from models.ResnetSt50_head_arc import ResNeSt50ModelArcFaceModel
 from models.ConvNeXt_haed_arc import ConvNeXtArcFaceModel
 from models.SwinTransformer_haed_arc import SwinTransformerArcFaceModel
 from models.ConvNeXtModel import ConvNeXtModel
+from models.ConvNeXtV2Model import ConvNeXtV2Model
 from models.ResnetSt101e_head_arc import ResNeSt101eModelArcFaceModel
 
 __all__ = ['Resnet18Model', 'Resnet50HeadArc']
@@ -33,6 +34,7 @@ MODEL_REGISTRY: 'dict[str, torch.nn.Module]' = {
     "ConvNeXtArcFaceModel": ConvNeXtArcFaceModel,
     "SwinTransformerArcFaceModel": SwinTransformerArcFaceModel,
     "ConvNeXtModel": ConvNeXtModel,
+    "ConvNeXtV2Model": ConvNeXtV2Model,
     "ResNeSt101eModelArcFaceModel": ResNeSt101eModelArcFaceModel,
 }
 

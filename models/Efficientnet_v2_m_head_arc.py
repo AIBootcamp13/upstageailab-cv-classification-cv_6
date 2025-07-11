@@ -37,8 +37,10 @@ class EfficientNetV2MArcFaceModel(nn.Module):
         features = self.backbone(x)
         embedding = self.neck(features)
         
-        if labels is not None:
+        # 학습 시에는 레이블을 사용하여 ArcFace 손실 계산
+        if self.training and labels is not None:
             output = self.head(embedding, labels)
+        # 추론 시에는 코사인 유사도 기반으로 로짓 계산
         else:
             output = F.linear(F.normalize(embedding), F.normalize(self.head.weight))
             output *= self.head.s

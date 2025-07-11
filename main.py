@@ -50,7 +50,7 @@ data_path = './data'
 output_root = './output'
 
 # training config
-num_workers = os.cpu_count() // 2
+num_workers = 4 # 메모리 절약을 위해 감소
 num_classes = 17
 meta_df = pd.read_csv(f"{data_path}/meta_kr.csv")
 class_names = meta_df["class_name"].tolist()
@@ -89,40 +89,19 @@ train_loader = DataLoader(
     # shuffle=True,
     sampler=sampler,
     num_workers=num_workers,
-    pin_memory=True,
+    pin_memory=False,
     drop_last=False,
-    persistent_workers=True,
+    persistent_workers=False,
 )
 val_loader = DataLoader(
     val_dataset,
     batch_size=cfg["BATCH_SIZE"],
-    shuffle=True,
+    shuffle=False, # 검증 데이터는 보통 섞지 않습니다.
     num_workers=num_workers,
-    pin_memory=True,
+    pin_memory=False,
     drop_last=False,
-    persistent_workers=True
+    persistent_workers=False
 )
-
-# train_loader = DataLoader(
-#     train_dataset,
-#     batch_size=cfg["BATCH_SIZE"],
-#     shuffle=True,
-#     num_workers=24,
-#     pin_memory=True,
-#     drop_last=False,
-#     persistent_workers=True,
-#     prefetch_factor=4,
-# )
-# val_loader = DataLoader(
-#     val_dataset,
-#     batch_size=cfg["BATCH_SIZE"],
-#     shuffle=True,
-#     num_workers=24,
-#     pin_memory=True,
-#     drop_last=False,
-#     persistent_workers=True,
-#     prefetch_factor=4,
-# )
 
 def unfreeze(model: nn.Module) -> nn.Parameter:
     # 1. 모델의 모든 파라미터를 우선 동결(freeze)합니다.
@@ -171,6 +150,9 @@ def train_block():
     training_args = {}
     if cfg["training_mode"] == 'on_amp':
         training_args['scaler'] = GradScaler()
+
+    # 그래디언트 누적 스텝을 training_args에 추가합니다.
+    training_args['accumulation_steps'] = cfg.get('accumulation_steps', 1)
 
     model, valid_max_accuracy = training_loop(
         training_fn,
@@ -275,8 +257,9 @@ def setup_optimizer_params(
 
 if __name__ == "__main__":
     
-    save_path = f'{output_root}/checkpoint.pth'
-    
+    # save_path = f'{output_root}/checkpoint.pth'
+    save_path = f'{output_root}/efficientnet_v2_checkpoint.pth'
+   
     # load model
     model: nn.Module = ModelClass(num_classes=num_classes).to(device)
     
@@ -308,10 +291,14 @@ if __name__ == "__main__":
     if cfg["training_mode"] == 'on_amp':
         training_args['scaler'] = GradScaler()
 
+    # 그래디언트 누적 스텝을 training_args에 추가합니다. (논리 오류 수정)
+    # 이 설정이 누락되면 config 파일에 값을 지정해도 적용되지 않습니다.
+    training_args['accumulation_steps'] = cfg.get('accumulation_steps', 1)
+
     model, valid_max_accuracy = training_loop(
         training_fn,
         model, train_loader, val_loader, train_dataset, val_dataset, 
         criterion, optimizer, device, cfg["EPOCHS"], 
         early_stopping, logger, class_names, Scheduler,
-        training_args,
+        training_args # 마지막 쉼표를 제거하여 문법 오류 해결
         )

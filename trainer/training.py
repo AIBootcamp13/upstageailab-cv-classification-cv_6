@@ -68,7 +68,7 @@ def training(model, dataloader, train_dataset, criterion, optimizer, device, epo
   return model, ret
 
 
-def training_use_amp(model, dataloader, train_dataset, criterion, optimizer, device, epoch, num_epochs, scaler):
+def training_use_amp(model, dataloader, train_dataset, criterion, optimizer, device, epoch, num_epochs, scaler, accumulation_steps=1):
   model.train()  # 모델을 학습 모드로 설정
   train_loss = 0.0
   train_accuracy = 0

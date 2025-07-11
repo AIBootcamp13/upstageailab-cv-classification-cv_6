@@ -6,7 +6,7 @@ num_blocks_to_unfreeze: 4 # 모델의 피처 부분을 얼마나 더 학습시�
 model_type: resnet # efficientnet, resnet, convnext, swin
 backbone_lr: 0.00001
 use_differential_lr: True
-patience: 20 # 조기 종료
+patience: 30 # 조기 종료
 delta: 0.01 # 개선이라고 간주하는 값
 DATASET: FastImageDataset
 MODEL: ResNeSt101eModelArcFaceModel
@@ -29,7 +29,12 @@ scheduler:
     }
 
 loss:
-  name: FocalLoss
+  name: FocalLossWithLabelSmoothing
   params: {
-    gamma: 2.0
+    gamma: 2.0,
+    smoothing: 0.1,
+    num_classes: 17
   }
+
+# 그래디언트 누적으로 효과적인 배치 크기 유지
+accumulation_steps: 3

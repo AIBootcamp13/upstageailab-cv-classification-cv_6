@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from .label_smoothing import LabelSmoothingCrossEntropy, FocalLossWithLabelSmoothing
 
 class FocalLoss(nn.Module):
     def __init__(self, alpha=None, gamma=2.0, reduction='mean', label_smoothing=0.0):
@@ -33,6 +34,8 @@ class FocalLoss(nn.Module):
 LOSS_REGISTRY: dict[str, nn.Module] = {
     "CrossEntropyLoss": nn.CrossEntropyLoss,
     "FocalLoss": FocalLoss,
+    "LabelSmoothingCrossEntropy": LabelSmoothingCrossEntropy,
+    "FocalLossWithLabelSmoothing": FocalLossWithLabelSmoothing,
 }
 
 def get_loss(name: str, params: dict) -> nn.Module:
