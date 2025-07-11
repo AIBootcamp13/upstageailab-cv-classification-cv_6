@@ -28,7 +28,7 @@ def cutmix_data(x, y, alpha=1.0):
         lam = 1
 
     batch_size = x.size()[0]
-    # ❗️ 시각화용 코드와 달리, 전체 배치 크기에 맞게 랜덤 인덱스를 생성합니다.
+    # 시각화용 코드와 달리, 전체 배치 크기에 맞게 랜덤 인덱스를 생성합니다.
     index = torch.randperm(batch_size).to(x.device)
 
     # 레이블도 섞어줍니다.
@@ -37,7 +37,7 @@ def cutmix_data(x, y, alpha=1.0):
     bbx1, bby1, bbx2, bby2 = rand_bbox(x.size(), lam)
     
     mixed_x = x.clone()
-    # ❗️ 이제 mixed_x와 x[index, ...]의 배치 크기가 동일하여 오류가 발생하지 않습니다.
+    # 이제 mixed_x와 x[index, ...]의 배치 크기가 동일하여 오류가 발생하지 않습니다.
     mixed_x[:, :, bby1:bby2, bbx1:bbx2] = x[index, :, bby1:bby2, bbx1:bbx2]
     
     lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (x.size()[-1] * x.size()[-2]))
@@ -104,7 +104,7 @@ def visualize(original_images, result_image, augmentation_name):
 
 
 if __name__ == "__main__":
-    # ❗️ 여기에 준비한 이미지 파일 경로를 입력하세요.
+    # 여기에 준비한 이미지 파일 경로를 입력하세요.
     data_path = './data'
     IMAGE_PATH_1 = f'{data_path}/train/0a4adccbb7fe73e0.jpg'
     IMAGE_PATH_2 = f'{data_path}/train/0a26fc63987e05eb.jpg'

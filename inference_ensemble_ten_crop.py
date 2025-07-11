@@ -3,17 +3,45 @@ import torch
 import pandas as pd
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
 import torchvision.transforms as T
 
-from utils.utils import set_seed
 from config.config import load_config
 from models import get_model
 from datasets import get_dataset
 from datasets.transforms import build_unified_transforms
 from utils.predict_tta import get_tta_predictions
 
-SEED = 777
-set_seed(SEED)
+
+def get_tencrop_predictions(model, image_batch, crop_transform, device):
+    """
+    TenCrop TTA를 적용하여 이미지 배치의 최종 예측 확률을 반환합니다.
+    """
+    model.eval()
+    with torch.no_grad():
+        # image_batch: (B, 3, H, W)
+        batch_size = image_batch.size(0)
+        
+        # 1. TenCrop 적용: (B, 10, 3, H_crop, W_crop)
+        # ToPILImage를 먼저 적용해야 할 수 있습니다. (입력 타입에 따라)
+        cropped_images = torch.stack([crop_transform(T.ToPILImage()(img)) for img in image_batch]).to(device)
+
+        # 2. 배치 차원과 crop 차원을 합쳐서 모델에 넣을 준비
+        # (B, 10, 3, H_crop, W_crop) -> (B * 10, 3, H_crop, W_crop)
+        input_tensor = cropped_images.view(-1, 3, cropped_images.size(3), cropped_images.size(4))
+
+        # 3. 모델 예측
+        logits = model(input_tensor) # (B * 10, num_classes)
+        
+        # 4. 결과 종합 (평균)
+        # (B * 10, num_classes) -> (B, 10, num_classes)
+        logits = logits.view(batch_size, 10, -1)
+        
+        # 10개 crop 결과의 소프트맥스 확률 평균 계산
+        probs = F.softmax(logits, dim=2).mean(dim=1) # (B, num_classes)
+        
+    return probs
+
 
 # --- 기본 설정 ---
 cfg = load_config("config/inference_config.yaml")
@@ -60,15 +88,21 @@ if use_weight:
     weights = [0.2, 0.4, 0.4]
 else:
     weights = [1 / num_models] * num_models
+    
+# 1단계: TenCrop과 텐서 변환
+# 주의: TenCrop은 PIL Image에 적용되어야 하므로, ToTensor보다 앞에 와야 합니다.
+# Normalize는 텐서에 적용되므로, TenCrop의 결과(텐서 리스트)에 람다 함수로 적용합니다.
+crop_transform = T.Compose([
+    T.TenCrop(size=550), # 원본 이미지(600x600)보다 약간 작은 크기로 자름
+    T.Lambda(lambda crops: torch.stack([T.ToTensor()(crop) for crop in crops])), # 10개의 PIL 이미지를 텐서 스택으로 변환
+    T.Lambda(lambda tensors: torch.stack([T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])(t) for t in tensors]))
+])
 
 # 2. TTA 변환 정의
 tta_transforms = [
     T.RandomHorizontalFlip(p=1.0),
     T.RandomAffine(degrees=10, scale=(0.9, 1.1)),
-    T.RandomPerspective(distortion_scale=0.1, p=1.0),
-    T.ColorJitter(brightness=0.2, contrast=0.2),
 ]
-
 
 # --- 모델 로드 ---
 ensemble_models = []
@@ -83,13 +117,13 @@ print(f"{len(ensemble_models)}개의 모델 로딩 완료.")
 
 # --- 앙상블 + TTA 추론 루프 ---
 final_predictions = []
-for images, _, _ in tqdm(tst_loader, desc="Weighted Ensemble Inferencing"):
+for images, _, _ in tqdm(tst_loader, desc="Weighted Ensemble + TenCrop TTA Inferencing"):
     
     batch_model_predictions = []
 
     # 각 모델에 대해 TTA 추론 수행
     for model in ensemble_models:
-        model_avg_probs = get_tta_predictions(model, images, tta_transforms, device)
+        model_avg_probs = get_tencrop_predictions(model, images, crop_transform, device)
         batch_model_predictions.append(model_avg_probs)
     
     # 1. 예측 결과들을 하나의 텐서로 합칩니다. (형태: [모델개수, 배치크기, 클래스개수])

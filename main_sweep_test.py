@@ -1,6 +1,6 @@
 import os
 import datetime
-import time
+from dotenv import load_dotenv
 
 import torch
 import pandas as pd
@@ -8,7 +8,8 @@ import numpy as np
 import torch.nn as nn
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
-from pytorch_metric_learning import losses, miners
+import wandb
+
 
 from config.config import load_config
 from utils.utils import *
@@ -25,15 +26,13 @@ from trainer import *
 from trainer.wandb_logger import WandbLogger
 
 
-os.environ['TZ'] = 'Asia/Seoul'
-time.tzset()
+# 시드를 고정합니다.
+SEED = 42
+set_seed(SEED)
+
 
 cfg = load_config("config/main_config.yaml")
-train_transform, val_transform = build_unified_transforms(cfg["transforms"]["train"]), build_unified_transforms(cfg["transforms"]["val"])
 
-# 시드를 고정합니다.
-SEED = cfg["SEED"]
-set_seed(SEED)
 
 DatasetClass = get_dataset(cfg['DATASET'])
 ModelClass = get_model(cfg['MODEL'])
@@ -52,6 +51,7 @@ data_path = './data'
 
 # output config
 output_root = './output'
+save_path = f'{output_root}/checkpoint.pth'
 
 # training config
 num_workers = os.cpu_count() // 2
@@ -63,55 +63,59 @@ class_names = meta_df["class_name"].tolist()
 date = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
 filename = f"{cfg['MODEL']}_{date}"
 
-# wandb
-logger = WandbLogger(
-    project_name="document-type-classification",
-    run_name=filename,
-    config=cfg,
-    save_path=f"{output_root}/checkpoint.pth"
-)
 
-# sampler
-sampler = setting_sampler(f"{data_path}/train_valid_set/train-label-fix-v1.csv")
+def setting_data_loader(cfg: dict, data_path):
+    train_transform, val_transform = build_unified_transforms(cfg["transforms"]["train"]), build_unified_transforms(cfg["transforms"]["val"])
+    
+    # sampler
+    sampler = setting_sampler(f"{data_path}/train_valid_set/train-label-fix-v1.csv")
 
-# Dataset 정의
-train_dataset = DatasetClass(
-    f"{data_path}/train_valid_set/train-label-fix-v1.csv",
-    f"{data_path}/train/",
-    transform=train_transform
-)
-val_dataset = DatasetClass(
-    f"{data_path}/train_valid_set/val-v1.csv",
-    f"{data_path}/train/",
-    transform=val_transform
-)
+    # Dataset 정의
+    train_dataset = DatasetClass(
+        f"{data_path}/train_valid_set/train-label-fix-v1.csv",
+        f"{data_path}/train/",
+        transform=train_transform
+    )
+    val_dataset = DatasetClass(
+        f"{data_path}/train_valid_set/val-v1.csv",
+        f"{data_path}/train/",
+        transform=val_transform
+    )
 
-# DataLoader 정의
-train_loader = DataLoader(
-    train_dataset,
-    batch_size=cfg["BATCH_SIZE"],
-    # shuffle=True,
-    sampler=sampler,
-    num_workers=num_workers,
-    pin_memory=True,
-    drop_last=False,
-    persistent_workers=True,
-    worker_init_fn=seed_worker,
-    generator=torch.Generator().manual_seed(SEED)
-)
-val_loader = DataLoader(
-    val_dataset,
-    batch_size=cfg["BATCH_SIZE"],
-    shuffle=True,
-    num_workers=num_workers,
-    pin_memory=True,
-    drop_last=False,
-    persistent_workers=True,
-    worker_init_fn=seed_worker,
-    generator=torch.Generator().manual_seed(SEED)
-)
-# 데이터 로더에 이런 옵션도 줄 수 있음 -> prefetch_factor=4
+    # DataLoader 정의
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=cfg["BATCH_SIZE"],
+        # shuffle=True,
+        sampler=sampler,
+        num_workers=num_workers,
+        pin_memory=True,
+        drop_last=False,
+        persistent_workers=True,
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=cfg["BATCH_SIZE"],
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+        drop_last=False,
+        persistent_workers=True
+    )
+    
+    return train_loader, val_loader, train_dataset, val_dataset
 
+def setting_model(model_name: str, model_class: nn.Module, config:wandb.sdk.wandb_config.Config):
+    if "ArcFace" in model_name:
+        return model_class(
+            num_classes=num_classes,
+            s=config.arcface_s,
+            m=config.arcface_m
+        )
+    else:
+        return model_class(
+            num_classes=num_classes,
+        )
 
 
 def setup_optimizer_params(
@@ -196,21 +200,35 @@ def setup_optimizer_params(
         
     return param_groups
 
-
-if __name__ == "__main__":
+def train():
+    # wandb
+    logger = WandbLogger(
+        project_name="document-type-classification",
+        config=cfg,
+        save_path=f"{output_root}/checkpoint.pth"
+    )
+    config = wandb.config
     
-    save_path = f'{output_root}/checkpoint.pth'
+    cfg["BATCH_SIZE"] = config.batch_size
+    
+    train_loader, val_loader, train_dataset, val_dataset = setting_data_loader(cfg=cfg, data_path=data_path)
     
     # load model
-    model: nn.Module = ModelClass(num_classes=num_classes).to(device)
+    model: nn.Module = setting_model(cfg["MODEL"], ModelClass, config).to(device)
+    
+    cfg_optimizer["params"]["lr"] = config.head_lr
+    cfg_optimizer["params"]["weight_decay"] = config.weight_decay
+    cfg_scheduler['params']["T_0"] = config.scheduler_T_0
+    cfg_loss['params']["gamma"] = config.loss_gamma
+    
     
     if cfg["use_unfreeze"]:
         params_to_update = setup_optimizer_params(
                                 model=model,
                                 model_type=cfg["model_type"], 
-                                num_layers_to_unfreeze=cfg["num_blocks_to_unfreeze"],
-                                backbone_lr=cfg["backbone_lr"],
-                                head_lr=cfg_optimizer["params"]["lr"],
+                                num_layers_to_unfreeze=config.num_blocks_to_unfreeze,
+                                backbone_lr=config.backbone_lr,
+                                head_lr=config.head_lr,
                                 use_differential_lr=cfg["use_differential_lr"]
                             )
     else:
@@ -220,36 +238,34 @@ if __name__ == "__main__":
 
     # 손실 함수
     criterion = get_loss(cfg_loss["name"], cfg_loss["params"])
-    
-    # Triplet loss
-    criterion_triplet = losses.TripletMarginLoss(margin=0.2) # margin 값은 조절 가능
-    # miner
-    miner = miners.MultiSimilarityMiner()
-    # Triplet Loss 가중치
-    triplet_loss_weight = cfg["triplet_loss_weight"] # 하이퍼파라미터
 
     # 옵티마이저
     optimizer = get_optimizer(cfg_optimizer["name"], params_to_update, cfg_optimizer["params"])
 
     # 스케쥴러
-    scheduler = get_scheduler(cfg_scheduler["name"], optimizer, cfg_scheduler['params'])
+    Scheduler = get_scheduler(cfg_scheduler["name"], optimizer, cfg_scheduler['params'])
     
     # amp를 위한 scaler 준비
     training_args = {}
     if cfg["training_mode"] == 'on_amp':
         training_args['scaler'] = GradScaler()
-    else:
-        training_args['scaler'] = None
-
-    # training_loop에 전달할 인자에 criterions, miner 추가
-    training_args['criterions'] = {'focal': criterion, 'triplet': criterion_triplet}
-    training_args['miner'] = miner
-    training_args['triplet_loss_weight'] = triplet_loss_weight
 
     model, valid_max_accuracy = training_loop(
         training_fn,
         model, train_loader, val_loader, train_dataset, val_dataset, 
-        optimizer, device, cfg["EPOCHS"], 
-        early_stopping, logger, class_names, scheduler,
+        criterion, optimizer, device, cfg["EPOCHS"], 
+        early_stopping, logger, class_names, Scheduler,
         training_args,
         )
+
+
+
+if __name__ == "__main__":
+    
+    sweep_configuration = get_yaml("./config/sweep-config.yaml")
+    
+    sweep_id = wandb.sweep(sweep=sweep_configuration, project="document-type-classification")
+    # 1. 터미널에서 `wandb sweep sweep-config.yaml` 실행 후 나오는 SWEEP_ID를 여기에 넣습니다.
+    wandb.agent(sweep_id=sweep_id, function=train, count=10)
+    
+    

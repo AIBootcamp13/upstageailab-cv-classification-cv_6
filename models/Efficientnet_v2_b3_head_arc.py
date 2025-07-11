@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from models.ArcMarginProduct import ArcMarginProduct # ArcMarginProduct 클래스를 파일에서 import
 
 class EfficientNetV2B3ArcFaceModel(nn.Module):
-    def __init__(self, num_classes, pretrained=True, embedding_size=512):
+    def __init__(self, num_classes, pretrained=True, embedding_size=512, s=30.0, m=0.55):
         super(EfficientNetV2B3ArcFaceModel, self).__init__()
         
         self.backbone = timm.create_model('tf_efficientnetv2_b3.in1k', pretrained=pretrained, num_classes=0)
@@ -28,8 +28,8 @@ class EfficientNetV2B3ArcFaceModel(nn.Module):
         self.head = ArcMarginProduct(
             in_features=embedding_size,
             out_features=num_classes,
-            s=30.0,  # 하이퍼파라미터, 조절 가능
-            m=0.55   # 하이퍼파라미터, 조절 가능
+            s=s,  # 하이퍼파라미터, 조절 가능
+            m=m   # 하이퍼파라미터, 조절 가능
         )
 
     def forward(self, x, labels=None):
@@ -40,12 +40,12 @@ class EfficientNetV2B3ArcFaceModel(nn.Module):
         embedding = self.neck(features)
 
         # 3. Head를 통해 로짓 계산
-        if labels is not None:
-            # Neck의 출력인 'embedding'을 head에 전달
+        if self.training:
+            assert labels is not None, "Labels are required during training for ArcFace."
             output = self.head(embedding, labels)
+            return output, embedding
         else:
-            # 추론 시에도 정규화된 'embedding'을 사용
             output = F.linear(F.normalize(embedding), F.normalize(self.head.weight))
             output *= self.head.s
             
-        return output
+            return output

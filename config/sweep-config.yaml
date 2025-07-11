@@ -1,0 +1,56 @@
+project: sweep-test
+entity: fkjy132
+# 실행할 파이썬 스크립트 파일명
+program: main.py
+
+# 탐색 방법
+method: bayes
+
+# 최적화 목표 지표
+metric:
+  name: valid_max_accuracy
+  goal: maximize
+
+# 튜닝할 하이퍼파라미터 목록
+parameters:
+  # 배치 사이즈
+  batch_size:
+    values: [4, 8, 16, 32]
+
+  # 차등 학습률
+  head_lr:
+    distribution: log_uniform_values
+    min: 1.0e-4
+    max: 1.0e-2
+  backbone_lr:
+    distribution: log_uniform_values
+    min: 1.0e-5
+    max: 1.0e-3
+
+  # Optimizer
+  weight_decay:
+    values: [0.01, 0.001]
+
+  # 모델 아키텍처
+  num_blocks_to_unfreeze:
+    values: [1, 2, 3, 4]
+
+  # ArcFace Head
+  arcface_s:
+    distribution: uniform
+    min: 25.0
+    max: 45.0
+  arcface_m:
+    distribution: uniform
+    min: 0.3
+    max: 0.55
+
+  # 스케줄러
+  scheduler_T_0:
+    values: [10, 20, 30]
+
+  # 손실 함수
+  loss_gamma:
+    distribution: uniform
+    min: 1.5
+    max: 3.0

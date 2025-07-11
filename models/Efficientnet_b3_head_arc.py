@@ -7,7 +7,7 @@ from models.ArcMarginProduct import ArcMarginProduct
 
 
 class EfficientNetB3ArcFace(nn.Module):
-    def __init__(self, num_classes, embedding_size=512):
+    def __init__(self, num_classes, embedding_size=512, s=30.0, m=0.55):
         """
         EfficientNet-B3를 백본으로 사용하는 ArcFace 모델
         :param num_classes: 최종 분류할 클래스의 개수
@@ -30,7 +30,7 @@ class EfficientNetB3ArcFace(nn.Module):
         )
         
         # 3. Head: ArcFace 헤드
-        self.head = ArcMarginProduct(embedding_size, num_classes)
+        self.head = ArcMarginProduct(embedding_size, num_classes, s=s, m=m)
 
     def forward(self, x, labels=None):
         """
@@ -44,16 +44,15 @@ class EfficientNetB3ArcFace(nn.Module):
         # Neck을 통과시켜 임베딩 벡터 생성
         features = self.neck(features)
         
-        # Head를 통과시켜 최종 로짓(logits) 계산
-        if labels is not None:
-            # 학습: ArcFace 마진 적용
-            logits = self.head(features, labels)
+        if self.training:
+            assert labels is not None, "Labels are required during training for ArcFace."
+            output = self.head(embedding, labels)
+            return output, embedding
         else:
-            # 추론: 단순 코사인 유사도 계산 (마진 없음)
-            logits = F.linear(F.normalize(features), F.normalize(self.head.weight))
-            logits *= self.head.s
+            output = F.linear(F.normalize(embedding), F.normalize(self.head.weight))
+            output *= self.head.s
             
-        return logits
+            return output
 
 
 if __name__ == '__main__':

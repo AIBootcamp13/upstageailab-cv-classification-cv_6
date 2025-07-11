@@ -8,10 +8,8 @@ import yaml
 import torchvision.transforms as T
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
-from torchvision.transforms.autoaugment import AutoAugmentPolicy
 import augraphy as ag
 
-from autoAugment.autoaugment import ImageNetPolicy, SVHNPolicy, CIFAR10Policy
 
 __all__ = ['load_transforms_from_yaml']
 

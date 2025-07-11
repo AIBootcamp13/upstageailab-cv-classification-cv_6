@@ -8,6 +8,7 @@ import numpy as np
 import torch.nn as nn
 from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
+from sklearn.model_selection import StratifiedKFold
 from pytorch_metric_learning import losses, miners
 
 from config.config import load_config
@@ -28,13 +29,13 @@ from trainer.wandb_logger import WandbLogger
 os.environ['TZ'] = 'Asia/Seoul'
 time.tzset()
 
+
+# 기본 설정 로드
 cfg = load_config("config/main_config.yaml")
 train_transform, val_transform = build_unified_transforms(cfg["transforms"]["train"]), build_unified_transforms(cfg["transforms"]["val"])
-
-# 시드를 고정합니다.
-SEED = cfg["SEED"]
+# 시드 고정
+SEED = 42
 set_seed(SEED)
-
 DatasetClass = get_dataset(cfg['DATASET'])
 ModelClass = get_model(cfg['MODEL'])
 cfg_scheduler = cfg["scheduler"]
@@ -43,75 +44,15 @@ cfg_loss = cfg["loss"]
 
 training_fn = TRAINING_REGISTRY[cfg['training_mode']]
 
-
-# device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# data config
+# 경로 및 데이터 정보
 data_path = './data'
-
-# output config
 output_root = './output'
-
-# training config
 num_workers = os.cpu_count() // 2
 num_classes = 17
 meta_df = pd.read_csv(f"{data_path}/meta_kr.csv")
 class_names = meta_df["class_name"].tolist()
-
-
-date = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
-filename = f"{cfg['MODEL']}_{date}"
-
-# wandb
-logger = WandbLogger(
-    project_name="document-type-classification",
-    run_name=filename,
-    config=cfg,
-    save_path=f"{output_root}/checkpoint.pth"
-)
-
-# sampler
-sampler = setting_sampler(f"{data_path}/train_valid_set/train-label-fix-v1.csv")
-
-# Dataset 정의
-train_dataset = DatasetClass(
-    f"{data_path}/train_valid_set/train-label-fix-v1.csv",
-    f"{data_path}/train/",
-    transform=train_transform
-)
-val_dataset = DatasetClass(
-    f"{data_path}/train_valid_set/val-v1.csv",
-    f"{data_path}/train/",
-    transform=val_transform
-)
-
-# DataLoader 정의
-train_loader = DataLoader(
-    train_dataset,
-    batch_size=cfg["BATCH_SIZE"],
-    # shuffle=True,
-    sampler=sampler,
-    num_workers=num_workers,
-    pin_memory=True,
-    drop_last=False,
-    persistent_workers=True,
-    worker_init_fn=seed_worker,
-    generator=torch.Generator().manual_seed(SEED)
-)
-val_loader = DataLoader(
-    val_dataset,
-    batch_size=cfg["BATCH_SIZE"],
-    shuffle=True,
-    num_workers=num_workers,
-    pin_memory=True,
-    drop_last=False,
-    persistent_workers=True,
-    worker_init_fn=seed_worker,
-    generator=torch.Generator().manual_seed(SEED)
-)
-# 데이터 로더에 이런 옵션도 줄 수 있음 -> prefetch_factor=4
-
 
 
 def setup_optimizer_params(
@@ -197,40 +138,103 @@ def setup_optimizer_params(
     return param_groups
 
 
-if __name__ == "__main__":
+def unfreeze(model: nn.Module, cfg: dict) -> nn.Parameter:
+    for param in model.parameters():
+        param.requires_grad = False
+    for i in range(cfg["num_blocks_to_unfreeze"]):
+        for param in model.backbone.blocks[-(i+1)].parameters():
+            param.requires_grad = True
+    for param in model.head.parameters():
+        param.requires_grad = True
+    return filter(lambda p: p.requires_grad, model.parameters())
+
+
+def run_fold(fold_num: int, cfg: dict, group_name: str):
+    print(f"========== FOLD {fold_num} / {cfg['n_splits']} ==========")
+
+    # --- Fold별 설정 (Per-Fold Setup) ---
     
-    save_path = f'{output_root}/checkpoint.pth'
+    # Fold별 파일명 및 저장 경로 설정
+    # Fold별 고유 이름과 공통 그룹 이름을 모두 사용
+    run_name = f"fold_{fold_num}" # run 이름은 간단하게 Fold 번호만 사용
+    save_path = f"{output_root}/{group_name}_{run_name}_checkpoint.pth"
+
+    # Fold별 로거 초기화
+    logger = WandbLogger(
+        project_name="document-type-classification-kfold",
+        run_name=run_name,
+        config=cfg,
+        group=group_name,
+        save_path=save_path,
+    )
+
+    # Fold별 데이터셋 및 데이터로더 생성
+    train_path = f"{data_path}/train_valid_set/folds/train_fold_{fold_num}_v1.csv"
+    val_path = f"{data_path}/train_valid_set/folds/val_fold_{fold_num}_v1.csv"
     
-    # load model
+    # sampler
+    sampler = setting_sampler(f"{data_path}/train_valid_set/folds/train_fold_{fold_num}.csv")
+    
+    g = torch.Generator()
+    g.manual_seed(cfg["SEED"])
+    
+    train_fold_dataset = DatasetClass(
+        csv=train_path,
+        path=f"{data_path}/train/", # 이미지 경로 추가
+        transform=train_transform
+    )
+    val_fold_dataset = DatasetClass(
+        csv=val_path,
+        path=f"{data_path}/train/", # 이미지 경로 추가
+        transform=val_transform
+    )
+    
+    train_loader = DataLoader(
+        train_fold_dataset,
+        batch_size=cfg["BATCH_SIZE"],
+        shuffle=False,
+        sampler=sampler,
+        num_workers=num_workers,
+        pin_memory=True,
+        worker_init_fn=seed_worker,
+        generator=g,  
+        )
+    val_loader = DataLoader(
+        val_fold_dataset, 
+        batch_size=cfg["BATCH_SIZE"], 
+        shuffle=False, 
+        num_workers=num_workers, 
+        pin_memory=True,
+        worker_init_fn=seed_worker,
+        generator=g,
+        )
+
+    # Fold별 모델, 옵티마이저, 스케줄러, EarlyStopping 등 초기화
     model: nn.Module = ModelClass(num_classes=num_classes).to(device)
     
     if cfg["use_unfreeze"]:
         params_to_update = setup_optimizer_params(
-                                model=model,
-                                model_type=cfg["model_type"], 
-                                num_layers_to_unfreeze=cfg["num_blocks_to_unfreeze"],
-                                backbone_lr=cfg["backbone_lr"],
-                                head_lr=cfg_optimizer["params"]["lr"],
-                                use_differential_lr=cfg["use_differential_lr"]
-                            )
+            model=model,
+            model_type=cfg["model_type"], 
+            num_layers_to_unfreeze=cfg["num_blocks_to_unfreeze"],
+            backbone_lr=cfg["backbone_lr"],
+            head_lr=cfg_optimizer["params"]["lr"],
+            use_differential_lr=cfg["use_differential_lr"]
+        )
     else:
         params_to_update = model.parameters()
 
     early_stopping = EarlyStopping(patience=cfg["patience"], delta=cfg["delta"], verbose=True, save_path=save_path, mode='max')
-
     # 손실 함수
     criterion = get_loss(cfg_loss["name"], cfg_loss["params"])
-    
     # Triplet loss
     criterion_triplet = losses.TripletMarginLoss(margin=0.2) # margin 값은 조절 가능
     # miner
     miner = miners.MultiSimilarityMiner()
     # Triplet Loss 가중치
-    triplet_loss_weight = cfg["triplet_loss_weight"] # 하이퍼파라미터
-
+    triplet_loss_weight = cfg["triplet_loss_weight"]
     # 옵티마이저
     optimizer = get_optimizer(cfg_optimizer["name"], params_to_update, cfg_optimizer["params"])
-
     # 스케쥴러
     scheduler = get_scheduler(cfg_scheduler["name"], optimizer, cfg_scheduler['params'])
     
@@ -248,8 +252,31 @@ if __name__ == "__main__":
 
     model, valid_max_accuracy = training_loop(
         training_fn,
-        model, train_loader, val_loader, train_dataset, val_dataset, 
+        model, train_loader, val_loader, train_fold_dataset, val_fold_dataset, 
         optimizer, device, cfg["EPOCHS"], 
         early_stopping, logger, class_names, scheduler,
         training_args,
         )
+    
+    return valid_max_accuracy
+
+
+if __name__ == "__main__":
+    
+    # StratifiedKFold 객체 생성 및 루프를 제거
+    all_fold_accuracies = []
+    
+    # 실험 전체를 대표할 그룹 이름 생성
+    experiment_date = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
+    experiment_group_name = f"{cfg['MODEL']}_{experiment_date}"
+
+    # 단순 for 루프로 변경
+    for fold_num in range(1, cfg["n_splits"] + 1):
+        fold_accuracy = run_fold(fold_num, cfg, experiment_group_name) # 수정된 run_fold 호출
+        all_fold_accuracies.append(fold_accuracy)
+
+    # 최종 결과 출력
+    print("\n========== K-Fold Training Finished ==========")
+    for i, acc in enumerate(all_fold_accuracies):
+        print(f"Fold {i+1} Best Accuracy: {acc:.4f}")
+    print(f"Average Best Accuracy: {np.mean(all_fold_accuracies):.4f}")

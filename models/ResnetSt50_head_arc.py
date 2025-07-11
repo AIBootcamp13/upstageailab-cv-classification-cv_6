@@ -1,4 +1,4 @@
-__all__ = ['ResNeSt50ModelArcFaceModel']
+__all__ = ['ResNeSt50ArcFaceModel']
 
 import timm
 import torch
@@ -7,9 +7,9 @@ import torch.nn.functional as F
 
 from models.ArcMarginProduct import ArcMarginProduct  # ArcMarginProduct 클래스를 import
 
-class ResNeSt50ModelArcFaceModel(nn.Module):
-    def __init__(self, num_classes, pretrained=True, embedding_size=512):
-        super(ResNeSt50ModelArcFaceModel, self).__init__()
+class ResNeSt50ArcFaceModel(nn.Module):
+    def __init__(self, num_classes, pretrained=True, embedding_size=512, s=30.0, m=0.55):
+        super(ResNeSt50ArcFaceModel, self).__init__()
         
         # 1. Backbone: EfficientNetV2-M
         self.backbone = timm.create_model('resnest50d', pretrained=pretrained, num_classes=0)
@@ -21,15 +21,16 @@ class ResNeSt50ModelArcFaceModel(nn.Module):
         self.neck = nn.Sequential(
             nn.Linear(backbone_output_features, embedding_size),
             nn.BatchNorm1d(embedding_size),
-            nn.ReLU()
+            nn.ReLU(),
+            nn.Dropout(0.5),
         )
         
         # 3. Head: ArcFace
         self.head = ArcMarginProduct(
             in_features=embedding_size,
             out_features=num_classes,
-            s=30.0,
-            m=0.55
+            s=s,
+            m=m
         )
 
     def forward(self, x, labels=None):
@@ -38,15 +39,14 @@ class ResNeSt50ModelArcFaceModel(nn.Module):
         
         # Neck을 통과하여 최종 임베딩 벡터 생성
         embedding = self.neck(features)
+        embedding = F.normalize(embedding, p=2, dim=1)
         
-        # 학습 시에는 레이블을 사용하여 ArcFace 손실 계산
-        if self.training and labels is not None:
+        if self.training:
+            assert labels is not None, "Labels are required during training for ArcFace."
             output = self.head(embedding, labels)
-        # 추론 시에는 코사인 유사도 기반으로 로짓 계산
+            return embedding, output
         else:
-            # 정규화된 임베딩과 정규화된 가중치 벡터 간의 코사인 유사도 계산
             output = F.linear(F.normalize(embedding), F.normalize(self.head.weight))
-            # ArcFace의 스케일(s)을 곱해줌 (추론 시 성능 향상에 도움)
             output *= self.head.s
-        
-        return output
+            
+            return output
